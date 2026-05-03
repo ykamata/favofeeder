@@ -2,15 +2,23 @@ package storage_test
 
 import (
 	"context"
+	"database/sql"
+	"os"
 	"testing"
 
 	"github.com/ykamata/favofeeder/internal/parser"
 	"github.com/ykamata/favofeeder/internal/storage"
 )
 
-func openTestDB(t *testing.T) interface{ Close() error } {
+// openTestDB opens a real MySQL DB for integration tests.
+// Set DATABASE_TEST_DSN to run; otherwise the test is skipped.
+func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := storage.Open(":memory:")
+	dsn := os.Getenv("DATABASE_TEST_DSN")
+	if dsn == "" {
+		t.Skip("DATABASE_TEST_DSN not set; skipping DB integration test")
+	}
+	db, err := storage.Open(dsn)
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
@@ -26,7 +34,6 @@ func TestHash_Deterministic(t *testing.T) {
 }
 
 func TestHash_URLOnly(t *testing.T) {
-	// Different summaries, same URL → same hash (URL is the dedup key)
 	a := storage.Hash(parser.ContentItem{SourceURL: "https://example.com/1", Summary: "summary A"})
 	b := storage.Hash(parser.ContentItem{SourceURL: "https://example.com/1", Summary: "summary B"})
 	if a != b {
@@ -51,11 +58,7 @@ func TestHash_DifferentURLs(t *testing.T) {
 }
 
 func TestSaveItems_Deduplication(t *testing.T) {
-	db, err := storage.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openTestDB(t)
 
 	items := []parser.ContentItem{
 		{Title: "記事1", Summary: "内容1", SourceURL: "https://example.com/1", ContentType: "news"},
@@ -64,7 +67,6 @@ func TestSaveItems_Deduplication(t *testing.T) {
 
 	ctx := context.Background()
 
-	// First save: both new
 	res, err := storage.SaveItems(ctx, db, "テスト", "anime", "website", items)
 	if err != nil {
 		t.Fatalf("first save: %v", err)
@@ -73,7 +75,6 @@ func TestSaveItems_Deduplication(t *testing.T) {
 		t.Errorf("first save: want new=2 dup=0, got new=%d dup=%d", res.New, res.Dup)
 	}
 
-	// Second save: both duplicates
 	res, err = storage.SaveItems(ctx, db, "テスト", "anime", "website", items)
 	if err != nil {
 		t.Fatalf("second save: %v", err)
@@ -84,11 +85,7 @@ func TestSaveItems_Deduplication(t *testing.T) {
 }
 
 func TestLogCrawl(t *testing.T) {
-	db, err := storage.Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openTestDB(t)
 
 	ctx := context.Background()
 	id, err := storage.LogCrawlStart(ctx, db)

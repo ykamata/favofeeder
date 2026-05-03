@@ -1,0 +1,18 @@
+services:
+  favofeeder:
+    build: .
+    image: favofeeder:latest
+    env_file: .env
+    volumes:
+      - ./config/targets.yaml:/app/config/targets.yaml:ro
+      # Codex CLI (Plus plan) credentials stored by `codex login` on the host
+      - ~/.codex:/root/.codex:ro
+    networks:
+      - nekolog-network
+    # favofeeder is a one-shot job; do not restart automatically.
+    restart: "no"
+
+networks:
+  nekolog-network:
+    external: true
+    name: nekolog_nekolog-network

@@ -46,7 +46,7 @@ func main() {
 func run(args []string) error {
 	fs := flag.NewFlagSet("favofeeder", flag.ContinueOnError)
 	configPath := fs.String("config", "config/targets.yaml", "path to targets YAML")
-	dbPath := fs.String("db", "favofeeder.db", "path to SQLite database")
+	dbPath := fs.String("db", os.Getenv("DATABASE_DSN"), "MySQL DSN (e.g. user:pass@tcp(host:3306)/dbname)")
 	codexPath := fs.String("codex", "codex", "path to Codex CLI binary")
 	model := fs.String("model", "gpt-5.5", "Codex model to use")
 	dryRun    := fs.Bool("dry-run", false, "print prompts without calling Codex or saving to DB")

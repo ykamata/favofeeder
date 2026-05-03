@@ -18,7 +18,7 @@ type SaveResult struct {
 // SaveItems inserts ContentItems, skipping duplicates by content_hash.
 func SaveItems(ctx context.Context, db *sql.DB, title, category, sourceType string, items []parser.ContentItem) (SaveResult, error) {
 	const q = `
-INSERT OR IGNORE INTO content_items
+INSERT IGNORE INTO content_items
   (title, category, source_url, source_type, content, content_hash, crawled_at)
 VALUES
   (?, ?, ?, ?, ?, ?, ?)`
