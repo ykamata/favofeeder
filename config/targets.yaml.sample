@@ -1,0 +1,32 @@
+slack:
+  webhooks:
+    - webhook_url: "https://hooks.slack.com/services/XXXX/YYYY/ZZZZ"
+      # titles を省略すると全ターゲットが対象になります
+      # titles:
+      #   - "タイトルA"
+      #   - "タイトルB"
+
+targets:
+  - title: "タイトルA"
+    category: game
+    sources:
+      - type: x_account
+        account: "@example_game"
+      - type: website
+        url: "https://example.com/game/news/"
+
+  - title: "タイトルB"
+    category: novel
+    sources:
+      - type: x_account
+        account: "@example_novel"
+      - type: website
+        url: "https://example.com/novel/"
+
+  - title: "タイトルC"
+    category: anime
+    sources:
+      - type: x_account
+        account: "@example_anime"
+      - type: website
+        url: "https://example.com/anime/"

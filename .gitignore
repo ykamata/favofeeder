@@ -1,0 +1,14 @@
+# sensitive config
+config/targets.yaml
+
+# database
+*.db
+
+# Claude local settings
+.claude/
+
+# build artifacts
+/favofeeder
+
+# Go
+vendor/
