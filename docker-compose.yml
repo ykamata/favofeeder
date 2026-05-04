@@ -5,8 +5,8 @@ services:
     env_file: .env
     volumes:
       - ./config/targets.yaml:/app/config/targets.yaml:ro
-      # Codex CLI (Plus plan) credentials stored by `codex login` on the host
-      - ~/.codex:/root/.codex:ro
+      # Codex CLI (Plus plan) credentials; rw required as codex writes session files on each exec
+      - ~/.codex:/root/.codex
     networks:
       - nekolog-network
     # favofeeder is a one-shot job; do not restart automatically.

@@ -55,9 +55,24 @@ DATABASE_DSN="user:pass@tcp(localhost:3306)/favofeeder" go run ./cmd/favofeeder
 
 ## データベース
 
-MySQL を使用。起動時に `CREATE TABLE IF NOT EXISTS` でスキーマを自動適用するため、DDL を手動で流す必要はない。
+MySQL を使用。起動時に `CREATE TABLE IF NOT EXISTS` でスキーマを自動適用するため、テーブルの DDL を手動で流す必要はない。
 
 接続先は `DATABASE_DSN` 環境変数または `-db` フラグで指定する。
+
+### 事前準備（初回のみ）
+
+アプリが接続する **Database 自体は事前に作成が必要**。MySQL に管理者権限を持つユーザーで接続して実行する。
+
+```sql
+CREATE DATABASE IF NOT EXISTS favofeeder
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+-- アプリ用ユーザーが別途必要な場合
+CREATE USER 'favofeeder'@'%' IDENTIFIED BY 'password';
+GRANT ALL PRIVILEGES ON favofeeder.* TO 'favofeeder'@'%';
+FLUSH PRIVILEGES;
+```
 
 ## Docker（サーバー運用）
 
@@ -81,7 +96,8 @@ cp .env.example .env
 # → DATABASE_DSN を実際の値に編集
 
 # 4. Codex Plus ログイン（初回のみ）
-docker compose run --rm favofeeder codex login
+#    --entrypoint で favofeeder を上書きして codex を直接実行する
+docker compose run --rm --entrypoint codex favofeeder login
 
 # 5. 実行
 docker compose run --rm favofeeder
