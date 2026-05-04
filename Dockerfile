@@ -15,8 +15,11 @@ FROM node:22-bookworm-slim
 
 WORKDIR /app
 
-# Install OpenAI Codex CLI globally
-RUN npm install -g @openai/codex
+# Install CA certificates (required for TLS connections by codex) and Codex CLI
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && npm install -g @openai/codex
 
 # Copy compiled Go binary
 COPY --from=builder /app/favofeeder /usr/local/bin/favofeeder
