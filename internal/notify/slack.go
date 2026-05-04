@@ -90,7 +90,7 @@ func buildPayload(result crawler.Result) slackPayload {
 		}
 		blocks = append(blocks, slackBlock{
 			Type: "section",
-			Text: &slackText{Type: "mrkdwn", Text: strings.TrimRight(sb.String(), "\n")},
+			Text: &slackText{Type: "mrkdwn", Text: truncateMrkdwn(strings.TrimRight(sb.String(), "\n"), 3000)},
 		})
 		blocks = append(blocks, slackBlock{Type: "divider"})
 	}
@@ -110,6 +110,20 @@ func buildPayload(result crawler.Result) slackPayload {
 
 	summaryText := fmt.Sprintf("favofeeder: %d件の新着情報", result.TotalNew)
 	return slackPayload{Text: summaryText, Blocks: blocks}
+}
+
+// truncateMrkdwn truncates s to at most max runes, cutting at the last newline
+// before the limit so blocks are not split mid-line.
+func truncateMrkdwn(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	cut := string(runes[:max-1])
+	if idx := strings.LastIndex(cut, "\n"); idx > 0 {
+		cut = cut[:idx]
+	}
+	return cut + "\n…(省略)"
 }
 
 func categoryEmoji(category string) string {
