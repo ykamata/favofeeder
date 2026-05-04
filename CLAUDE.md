@@ -96,8 +96,9 @@ cp .env.example .env
 # → DATABASE_DSN を実際の値に編集
 
 # 4. Codex Plus ログイン（初回のみ）
-#    --entrypoint で favofeeder を上書きして codex を直接実行する
-docker compose run --rm --entrypoint codex favofeeder login
+#    サーバー（ヘッドレス環境）では --device-auth を使う
+#    表示された URL を手元のブラウザで開いてコードを入力する
+docker compose run --rm --entrypoint codex favofeeder login --device-auth
 
 # 5. 実行
 docker compose run --rm favofeeder
