@@ -1,0 +1,14 @@
+[Unit]
+Description=favofeeder - お気に入りコンテンツ最新情報収集
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/myapp/favofeeder
+ExecStart=docker compose run --rm favofeeder
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

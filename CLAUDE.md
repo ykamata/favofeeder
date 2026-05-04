@@ -103,6 +103,27 @@ codex login --device-auth
 docker compose run --rm favofeeder
 ```
 
+### 定期実行（systemd timer）
+
+`deploy/` 以下のユニットファイルを使って JST 9:00 / 18:00 に定期実行する。
+
+```bash
+# ユニットファイルをインストール
+sudo cp deploy/favofeeder.service /etc/systemd/system/
+sudo cp deploy/favofeeder.timer   /etc/systemd/system/
+
+# 有効化・起動
+sudo systemctl daemon-reload
+sudo systemctl enable --now favofeeder.timer
+
+# 状態確認
+systemctl status favofeeder.timer
+systemctl list-timers favofeeder.timer
+
+# ログ確認
+journalctl -u favofeeder.service
+```
+
 ## 設定ファイル
 
 `config/targets.yaml` は `.gitignore` に含まれており、**リポジトリに追跡されない**。

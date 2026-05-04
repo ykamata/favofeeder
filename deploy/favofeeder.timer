@@ -1,0 +1,10 @@
+[Unit]
+Description=favofeeder timer (JST 9:00 / 18:00)
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Asia/Tokyo
+OnCalendar=*-*-* 18:00:00 Asia/Tokyo
+Persistent=true
+
+[Install]
+WantedBy=timers.target
