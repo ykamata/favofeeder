@@ -96,12 +96,8 @@ cp .env.example .env
 # → DATABASE_DSN を実際の値に編集
 
 # 4. Codex Plus ログイン（初回のみ）
-#    nekolog_nekolog-network はインターネットに出られないため docker run で直接実行する
 #    表示された URL を手元のブラウザで開いてコードを入力する
-docker run --rm -it \
-  --entrypoint codex \
-  -v ~/.codex:/root/.codex \
-  favofeeder:latest login --device-auth
+codex login --device-auth
 
 # 5. 実行
 docker compose run --rm favofeeder
