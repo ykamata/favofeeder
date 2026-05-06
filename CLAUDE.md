@@ -5,7 +5,8 @@
 ## アーキテクチャ
 
 ```
-config/targets.yaml  →  Crawler  →  Codex CLI  →  Parser  →  MySQL
+config/targets.yaml  →  Crawler  →  Codex CLI  →  Parser  →  MySQL（本番）
+                                                              │  SQLite（ローカル）
                                                               ↓
                                                          Slack Webhook
 ```
@@ -19,7 +20,7 @@ config/targets.yaml  →  Crawler  →  Codex CLI  →  Parser  →  MySQL
 | `internal/codex` | Codex CLI の実行とプロンプト生成 |
 | `internal/crawler` | ターゲットごとの取得ループ、クロールログ |
 | `internal/parser` | Codex 出力のパース |
-| `internal/storage` | MySQL 保存・重複排除・クロールログ・起動時スキーマ自動適用 |
+| `internal/storage` | DB 保存・重複排除・クロールログ・起動時スキーマ自動適用（MySQL / SQLite） |
 | `internal/notify` | Slack Webhook 通知 |
 
 ## 開発コマンド
@@ -28,14 +29,17 @@ config/targets.yaml  →  Crawler  →  Codex CLI  →  Parser  →  MySQL
 # ビルド
 go build ./...
 
-# テスト（Hash 系は常時実行、DB 統合テストは DATABASE_TEST_DSN が必要）
+# テスト（DATABASE_TEST_DSN 未設定時は SQLite in-memory で実行）
 go test -race ./...
 DATABASE_TEST_DSN="user:pass@tcp(localhost:3306)/favofeeder_test" go test -race ./...
 
-# ドライラン（Codex を呼ばずプロンプトのみ表示）
-go run ./cmd/favofeeder -dry-run -v
+# ドライラン（Codex を実際に呼び出してレスポンスを確認、保存・通知なし）
+go run ./cmd/favofeeder -local -dry-run -v
 
-# 実行
+# ローカル実行（SQLite）
+go run ./cmd/favofeeder -local
+
+# 本番実行（MySQL）
 DATABASE_DSN="user:pass@tcp(localhost:3306)/favofeeder" go run ./cmd/favofeeder
 ```
 
@@ -48,9 +52,9 @@ DATABASE_DSN="user:pass@tcp(localhost:3306)/favofeeder" go run ./cmd/favofeeder
 | `-local` | `false` | SQLite を使用（ローカル開発用）。`-db` 未指定時は `favofeeder.db` |
 | `-codex` | `codex` | Codex CLI バイナリのパス |
 | `-model` | `gpt-5.5` | Codex が使用するモデル |
-| `-dry-run` | `false` | プロンプトを表示するだけ（保存・通知なし） |
+| `-dry-run` | `false` | Codex を呼び出してレスポンスを表示するが、保存・通知はしない |
 | `-since-days` | `30` | 初回実行時に遡る日数（2回目以降は前回クロール時刻を使用） |
-| `-v` | `false` | デバッグログを有効化 |
+| `-v` | `false` | デバッグログを有効化（プロンプト内容を出力） |
 
 `parseTime=true` は MySQL DSN に指定がなくても自動付与されます。
 
@@ -60,7 +64,7 @@ DATABASE_DSN="user:pass@tcp(localhost:3306)/favofeeder" go run ./cmd/favofeeder
 
 | 環境 | 起動方法 |
 |---|---|
-| ローカル開発 | `go run ./cmd/favofeeder -local -dry-run` |
+| ローカル開発 | `go run ./cmd/favofeeder -local -dry-run -v` |
 | 本番 | `DATABASE_DSN="..." docker compose run --rm favofeeder` |
 
 接続先は `DATABASE_DSN` 環境変数または `-db` フラグで指定する（MySQL の場合）。
@@ -107,6 +111,29 @@ codex login --device-auth
 
 # 5. 実行
 docker compose run --rm favofeeder
+```
+
+### サーバー更新手順
+
+コード変更後は `scripts/deploy.sh` を使う。
+
+```bash
+# 通常のデプロイ（pull + build）
+./scripts/deploy.sh
+
+# ビルド後に dry-run で動作確認
+./scripts/deploy.sh --dry-run
+
+# ビルド後にそのまま本番実行
+./scripts/deploy.sh --run
+```
+
+`config/targets.yaml` だけ変更した場合はビルド不要（ボリュームマウントのため）。
+
+```bash
+# targets.yaml をローカルからコピーして即時反映
+scp config/targets.yaml ubuntu-server:/opt/myapp/favofeeder/config/targets.yaml
+ssh ubuntu-server sudo systemctl start favofeeder.service
 ```
 
 ### 定期実行（systemd timer）
