@@ -113,6 +113,8 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 		return storage.SaveResult{}, fmt.Errorf("parse output: %w\nraw output: %s", err, output)
 	}
 
+	items = c.filterByDate(items)
+
 	if c.dryRun {
 		slog.Info("[dry-run] response", "output", output, "items", len(items))
 		return storage.SaveResult{}, nil
@@ -125,4 +127,27 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 	}
 
 	return storage.SaveItems(ctx, c.db, target.Title, target.Category, sourceType, items)
+}
+
+// filterByDate removes items whose published_date is known and older than sinceDate.
+// Items with no published_date are kept as their date cannot be verified.
+func (c *Crawler) filterByDate(items []parser.ContentItem) []parser.ContentItem {
+	if c.sinceDate.IsZero() {
+		return items
+	}
+	since := c.sinceDate.Truncate(24 * time.Hour)
+	filtered := items[:0]
+	for _, item := range items {
+		if item.PublishedDate == "" {
+			filtered = append(filtered, item)
+			continue
+		}
+		d, err := time.Parse("2006-01-02", item.PublishedDate)
+		if err != nil || !d.Before(since) {
+			filtered = append(filtered, item)
+			continue
+		}
+		slog.Debug("filtered out old item", "url", item.SourceURL, "published", item.PublishedDate, "since", since.Format("2006-01-02"))
+	}
+	return filtered
 }

@@ -70,7 +70,9 @@ func BuildPrompt(title, category string, sources []string, sinceDate time.Time) 
 	var periodInstruction string
 	if !sinceDate.IsZero() {
 		periodInstruction = fmt.Sprintf(`
-**収集対象期間**: %s 以降を優先して収集すること。日付が明記されていない場合でも、最近の情報と判断できれば含める。`,
+**収集対象期間**:
+- published_date が判明している記事: %s 以降のもののみ収集する。それより古い記事は除外する。
+- published_date が不明な記事: 最近の情報と判断できれば含める。`,
 			sinceDate.Format("2006年1月2日"))
 	}
 
