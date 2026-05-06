@@ -28,7 +28,13 @@ func TestBuildPrompt(t *testing.T) {
 		t.Error("prompt should not contain date filter when sinceDate is zero")
 	}
 	if !strings.Contains(prompt, "日本語") {
-		t.Error("prompt should contain Japanese-only instruction")
+		t.Error("prompt should contain Japanese language instruction")
+	}
+	if !strings.Contains(prompt, "site:x.com") {
+		t.Error("prompt should contain X search query")
+	}
+	if !strings.Contains(prompt, "Web 検索") {
+		t.Error("prompt should contain web search instruction")
 	}
 }
 

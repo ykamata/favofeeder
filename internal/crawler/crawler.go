@@ -91,7 +91,8 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 	for i, s := range target.Sources {
 		switch s.Type {
 		case "x_account":
-			sources[i] = fmt.Sprintf("X (Twitter): %s", s.Account)
+			account := strings.TrimPrefix(s.Account, "@")
+			sources[i] = fmt.Sprintf("https://x.com/%s", account)
 		case "website":
 			sources[i] = s.URL
 		}
