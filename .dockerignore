@@ -1,0 +1,15 @@
+# Git
+.git
+.gitignore
+
+# Local dev
+~
+.env
+*.db
+favofeeder.db
+
+# Config with secrets (mounted as volume at runtime)
+config/targets.yaml
+
+# Dev artifacts
+*.test
