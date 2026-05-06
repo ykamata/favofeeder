@@ -100,9 +100,7 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 
 	prompt := codex.BuildPrompt(target.Title, target.Category, sources, c.sinceDate)
 
-	if c.dryRun {
-		slog.Info("[dry-run] prompt", "prompt", prompt)
-	}
+	slog.Debug("prompt", "target", target.Title, "prompt", prompt)
 
 	slog.Info("calling codex", "target", target.Title, "sources", len(sources))
 	output, err := c.client.Run(ctx, prompt)
