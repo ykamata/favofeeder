@@ -16,12 +16,11 @@ type SaveResult struct {
 }
 
 // SaveItems inserts ContentItems, skipping duplicates by content_hash.
-func SaveItems(ctx context.Context, db *sql.DB, title, category, sourceType string, items []parser.ContentItem) (SaveResult, error) {
-	const q = `
-INSERT IGNORE INTO content_items
+func SaveItems(ctx context.Context, db *DB, title, category, sourceType string, items []parser.ContentItem) (SaveResult, error) {
+	q := fmt.Sprintf(`%s INTO content_items
   (title, category, source_url, source_type, content, content_hash, crawled_at)
 VALUES
-  (?, ?, ?, ?, ?, ?, ?)`
+  (?, ?, ?, ?, ?, ?, ?)`, db.insertIgnorePrefix())
 
 	now := time.Now().UTC()
 	var res SaveResult
@@ -41,7 +40,7 @@ VALUES
 	for _, item := range items {
 		hash := Hash(item)
 		content := fmt.Sprintf("%s\n%s", item.Title, item.Summary)
-		r, err := stmt.ExecContext(ctx, title, category, item.SourceURL, sourceType, content, hash, now)
+		r, err := stmt.ExecContext(ctx, title, category, item.SourceURL, sourceType, content, hash, db.timeVal(now))
 		if err != nil {
 			return res, fmt.Errorf("insert item %q: %w", item.SourceURL, err)
 		}
@@ -59,11 +58,11 @@ VALUES
 
 // LastSuccessfulCrawlTime returns the ended_at of the most recent successful crawl.
 // Returns zero time if no successful crawl exists yet.
-func LastSuccessfulCrawlTime(ctx context.Context, db *sql.DB) (time.Time, error) {
-	var t time.Time
-	err := db.QueryRowContext(ctx,
+func LastSuccessfulCrawlTime(ctx context.Context, db *DB) (time.Time, error) {
+	row := db.QueryRowContext(ctx,
 		`SELECT ended_at FROM crawl_logs WHERE status='success' ORDER BY ended_at DESC LIMIT 1`,
-	).Scan(&t)
+	)
+	t, err := db.scanTime(row)
 	if err == sql.ErrNoRows {
 		return time.Time{}, nil
 	}
@@ -74,10 +73,10 @@ func LastSuccessfulCrawlTime(ctx context.Context, db *sql.DB) (time.Time, error)
 }
 
 // LogCrawlStart inserts a crawl_log with status=running and returns its ID.
-func LogCrawlStart(ctx context.Context, db *sql.DB) (int64, error) {
+func LogCrawlStart(ctx context.Context, db *DB) (int64, error) {
 	r, err := db.ExecContext(ctx,
 		`INSERT INTO crawl_logs (started_at, status) VALUES (?, 'running')`,
-		time.Now().UTC(),
+		db.timeVal(time.Now().UTC()),
 	)
 	if err != nil {
 		return 0, fmt.Errorf("log crawl start: %w", err)
@@ -86,7 +85,7 @@ func LogCrawlStart(ctx context.Context, db *sql.DB) (int64, error) {
 }
 
 // LogCrawlEnd updates a crawl_log with final status and counts.
-func LogCrawlEnd(ctx context.Context, db *sql.DB, id int64, newItems, dupItems int, crawlErr error) error {
+func LogCrawlEnd(ctx context.Context, db *DB, id int64, newItems, dupItems int, crawlErr error) error {
 	status := "success"
 	var errMsg *string
 	if crawlErr != nil {
@@ -96,7 +95,7 @@ func LogCrawlEnd(ctx context.Context, db *sql.DB, id int64, newItems, dupItems i
 	}
 	_, err := db.ExecContext(ctx,
 		`UPDATE crawl_logs SET ended_at=?, status=?, items_new=?, items_dup=?, error_msg=? WHERE id=?`,
-		time.Now().UTC(), status, newItems, dupItems, errMsg, id,
+		db.timeVal(time.Now().UTC()), status, newItems, dupItems, errMsg, id,
 	)
 	return err
 }

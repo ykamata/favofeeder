@@ -2,7 +2,6 @@ package storage_test
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"testing"
 
@@ -10,17 +9,21 @@ import (
 	"github.com/ykamata/favofeeder/internal/storage"
 )
 
-// openTestDB opens a real MySQL DB for integration tests.
-// Set DATABASE_TEST_DSN to run; otherwise the test is skipped.
-func openTestDB(t *testing.T) *sql.DB {
+// openTestDB opens a DB for integration tests.
+// Uses MySQL when DATABASE_TEST_DSN is set, otherwise falls back to SQLite in-memory.
+func openTestDB(t *testing.T) *storage.DB {
 	t.Helper()
-	dsn := os.Getenv("DATABASE_TEST_DSN")
-	if dsn == "" {
-		t.Skip("DATABASE_TEST_DSN not set; skipping DB integration test")
+	if dsn := os.Getenv("DATABASE_TEST_DSN"); dsn != "" {
+		db, err := storage.Open(dsn, "mysql")
+		if err != nil {
+			t.Fatalf("open mysql test db: %v", err)
+		}
+		t.Cleanup(func() { db.Close() })
+		return db
 	}
-	db, err := storage.Open(dsn)
+	db, err := storage.Open(":memory:", "sqlite")
 	if err != nil {
-		t.Fatalf("open test db: %v", err)
+		t.Fatalf("open sqlite test db: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
 	return db

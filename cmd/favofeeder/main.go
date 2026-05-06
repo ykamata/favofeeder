@@ -46,12 +46,13 @@ func main() {
 func run(args []string) error {
 	fs := flag.NewFlagSet("favofeeder", flag.ContinueOnError)
 	configPath := fs.String("config", "config/targets.yaml", "path to targets YAML")
-	dbPath := fs.String("db", os.Getenv("DATABASE_DSN"), "MySQL DSN (e.g. user:pass@tcp(host:3306)/dbname)")
-	codexPath := fs.String("codex", "codex", "path to Codex CLI binary")
-	model := fs.String("model", "gpt-5.5", "Codex model to use")
-	dryRun    := fs.Bool("dry-run", false, "print prompts without calling Codex or saving to DB")
-	sinceDays := fs.Int("since-days", 30, "collect only items published within this many days (0 = no filter)")
-	verbose   := fs.Bool("v", false, "verbose logging")
+	dbPath     := fs.String("db", os.Getenv("DATABASE_DSN"), "MySQL DSN or SQLite file path")
+	local      := fs.Bool("local", false, "use SQLite for local development (default file: favofeeder.db)")
+	codexPath  := fs.String("codex", "codex", "path to Codex CLI binary")
+	model      := fs.String("model", "gpt-5.5", "Codex model to use")
+	dryRun     := fs.Bool("dry-run", false, "print prompts without calling Codex or saving to DB")
+	sinceDays  := fs.Int("since-days", 30, "collect only items published within this many days (0 = no filter)")
+	verbose    := fs.Bool("v", false, "verbose logging")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -68,7 +69,16 @@ func run(args []string) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	db, err := storage.Open(*dbPath)
+	driver := "mysql"
+	dsn := *dbPath
+	if *local {
+		driver = "sqlite"
+		if dsn == "" {
+			dsn = "favofeeder.db"
+		}
+	}
+
+	db, err := storage.Open(dsn, driver)
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
 	}

@@ -44,20 +44,26 @@ DATABASE_DSN="user:pass@tcp(localhost:3306)/favofeeder" go run ./cmd/favofeeder
 | フラグ | デフォルト | 説明 |
 |---|---|---|
 | `-config` | `config/targets.yaml` | ターゲット設定ファイルのパス |
-| `-db` | `$DATABASE_DSN` | MySQL DSN（例: `user:pass@tcp(host:3306)/dbname`） |
+| `-db` | `$DATABASE_DSN` | MySQL DSN または SQLite ファイルパス |
+| `-local` | `false` | SQLite を使用（ローカル開発用）。`-db` 未指定時は `favofeeder.db` |
 | `-codex` | `codex` | Codex CLI バイナリのパス |
 | `-model` | `gpt-5.5` | Codex が使用するモデル |
 | `-dry-run` | `false` | プロンプトを表示するだけ（保存・通知なし） |
 | `-since-days` | `30` | 初回実行時に遡る日数（2回目以降は前回クロール時刻を使用） |
 | `-v` | `false` | デバッグログを有効化 |
 
-`parseTime=true` は DSN に指定がなくても自動付与されます。
+`parseTime=true` は MySQL DSN に指定がなくても自動付与されます。
 
 ## データベース
 
-MySQL を使用。起動時に `CREATE TABLE IF NOT EXISTS` でスキーマを自動適用するため、テーブルの DDL を手動で流す必要はない。
+本番（Ubuntu）は MySQL、ローカル開発は SQLite を使用。起動時に `CREATE TABLE IF NOT EXISTS` でスキーマを自動適用する。
 
-接続先は `DATABASE_DSN` 環境変数または `-db` フラグで指定する。
+| 環境 | 起動方法 |
+|---|---|
+| ローカル開発 | `go run ./cmd/favofeeder -local -dry-run` |
+| 本番 | `DATABASE_DSN="..." docker compose run --rm favofeeder` |
+
+接続先は `DATABASE_DSN` 環境変数または `-db` フラグで指定する（MySQL の場合）。
 
 ### 事前準備（初回のみ）
 

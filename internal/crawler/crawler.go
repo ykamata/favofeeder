@@ -2,7 +2,6 @@ package crawler
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -16,12 +15,12 @@ import (
 
 type Crawler struct {
 	client    *codex.Client
-	db        *sql.DB
+	db        *storage.DB
 	dryRun    bool
 	sinceDate time.Time // zero = no date filter
 }
 
-func New(client *codex.Client, db *sql.DB, dryRun bool, sinceDate time.Time) *Crawler {
+func New(client *codex.Client, db *storage.DB, dryRun bool, sinceDate time.Time) *Crawler {
 	return &Crawler{client: client, db: db, dryRun: dryRun, sinceDate: sinceDate}
 }
 
@@ -100,12 +99,11 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 
 	prompt := codex.BuildPrompt(target.Title, target.Category, sources, c.sinceDate)
 
-	slog.Info("calling codex", "target", target.Title, "sources", len(sources))
 	if c.dryRun {
 		slog.Info("[dry-run] prompt", "prompt", prompt)
-		return storage.SaveResult{}, nil
 	}
 
+	slog.Info("calling codex", "target", target.Title, "sources", len(sources))
 	output, err := c.client.Run(ctx, prompt)
 	if err != nil {
 		return storage.SaveResult{}, fmt.Errorf("codex run: %w", err)
@@ -114,6 +112,11 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 	items, err := parser.Parse(output)
 	if err != nil {
 		return storage.SaveResult{}, fmt.Errorf("parse output: %w\nraw output: %s", err, output)
+	}
+
+	if c.dryRun {
+		slog.Info("[dry-run] response", "output", output, "items", len(items))
+		return storage.SaveResult{}, nil
 	}
 
 	// Determine source_type for DB (use first source type)
