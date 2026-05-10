@@ -5,10 +5,10 @@
 ## アーキテクチャ
 
 ```
-config/targets.yaml  →  Crawler  →  Codex CLI  →  Parser  →  MySQL（本番）
-                                                              │  SQLite（ローカル）
-                                                              ↓
-                                                         Slack Webhook
+config/targets.yaml  →  Crawler  →  Brave Search API  →  Codex CLI  →  Parser  →  MySQL（本番）
+                                                                                  │  SQLite（ローカル）
+                                                                                  ↓
+                                                                             Slack Webhook
 ```
 
 ### パッケージ構成
@@ -17,11 +17,19 @@ config/targets.yaml  →  Crawler  →  Codex CLI  →  Parser  →  MySQL（本
 |---|---|
 | `cmd/favofeeder` | エントリポイント、CLI フラグ |
 | `internal/config` | `targets.yaml` の読み込み・バリデーション |
-| `internal/codex` | Codex CLI の実行とプロンプト生成 |
+| `internal/search` | Brave Search API クライアント（web 検索結果を取得） |
+| `internal/codex` | Codex CLI の実行とプロンプト生成（検索結果を埋め込む） |
 | `internal/crawler` | ターゲットごとの取得ループ、クロールログ |
 | `internal/parser` | Codex 出力のパース |
 | `internal/storage` | DB 保存・重複排除・クロールログ・起動時スキーマ自動適用（MySQL / SQLite） |
 | `internal/notify` | Slack Webhook 通知 |
+
+### 処理フロー
+
+1. `crawler.runSearches` が Brave Search API を呼び出し（3クエリ: 最新情報・ニュース・アップデート）
+2. 検索結果（重複除去・日付フィルタ済み）を `codex.BuildPrompt` に渡す
+3. Codex CLI は渡された検索結果のみを使い JSON を返す（`web_search` ツール使用禁止）
+4. `parser.Parse` で JSON をパース → 日付フィルタ → DB 保存 → Slack 通知
 
 ## 開発コマンド
 
@@ -55,8 +63,18 @@ DATABASE_DSN="user:pass@tcp(localhost:3306)/favofeeder" go run ./cmd/favofeeder
 | `-dry-run` | `false` | Codex を呼び出してレスポンスを表示するが、保存・通知はしない |
 | `-since-days` | `30` | 初回実行時に遡る日数（2回目以降は前回クロール時刻を使用） |
 | `-v` | `false` | デバッグログを有効化（プロンプト内容を出力） |
+| `-brave-key` | `$BRAVE_API_KEY` | Brave Search API キー（未設定時は web 検索スキップ） |
 
 `parseTime=true` は MySQL DSN に指定がなくても自動付与されます。
+
+## 環境変数
+
+| 変数 | 必須 | 説明 |
+|---|---|---|
+| `DATABASE_DSN` | 本番のみ | MySQL DSN（例: `user:pass@tcp(mysql:3306)/favofeeder`） |
+| `BRAVE_API_KEY` | 任意 | Brave Search API キー（未設定時は web 検索なしで動作） |
+
+`.env` ファイルに設定するとローカル開発時に自動読み込みされます（`godotenv`）。
 
 ## データベース
 
@@ -103,7 +121,7 @@ cp config/targets.yaml.sample config/targets.yaml
 
 # 3. .env を作成
 cp .env.example .env
-# → DATABASE_DSN を実際の値に編集
+# → DATABASE_DSN と BRAVE_API_KEY を実際の値に編集
 
 # 4. Codex Plus ログイン（初回のみ）
 #    表示された URL を手元のブラウザで開いてコードを入力する
@@ -182,4 +200,4 @@ targets:
 ## 機密ファイル（.gitignore 済み）
 
 - `config/targets.yaml` — 実際のターゲット情報（個人情報含む）
-- `.env` — DATABASE_DSN など機密設定
+- `.env` — DATABASE_DSN・BRAVE_API_KEY など機密設定
