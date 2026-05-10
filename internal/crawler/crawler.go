@@ -10,18 +10,20 @@ import (
 	"github.com/ykamata/favofeeder/internal/codex"
 	"github.com/ykamata/favofeeder/internal/config"
 	"github.com/ykamata/favofeeder/internal/parser"
+	"github.com/ykamata/favofeeder/internal/search"
 	"github.com/ykamata/favofeeder/internal/storage"
 )
 
 type Crawler struct {
-	client    *codex.Client
-	db        *storage.DB
-	dryRun    bool
-	sinceDate time.Time // zero = no date filter
+	client       *codex.Client
+	searchClient *search.Client // nil = web search disabled
+	db           *storage.DB
+	dryRun       bool
+	sinceDate    time.Time // zero = no date filter
 }
 
-func New(client *codex.Client, db *storage.DB, dryRun bool, sinceDate time.Time) *Crawler {
-	return &Crawler{client: client, db: db, dryRun: dryRun, sinceDate: sinceDate}
+func New(client *codex.Client, searchClient *search.Client, db *storage.DB, dryRun bool, sinceDate time.Time) *Crawler {
+	return &Crawler{client: client, searchClient: searchClient, db: db, dryRun: dryRun, sinceDate: sinceDate}
 }
 
 type TargetResult struct {
@@ -98,11 +100,12 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 		}
 	}
 
-	prompt := codex.BuildPrompt(target.Title, target.Category, sources, c.sinceDate)
+	searchResults := c.runSearches(ctx, target.Title)
+	prompt := codex.BuildPrompt(target.Title, target.Category, sources, searchResults, c.sinceDate)
 
 	slog.Debug("prompt", "target", target.Title, "prompt", prompt)
 
-	slog.Info("calling codex", "target", target.Title, "sources", len(sources))
+	slog.Info("calling codex", "target", target.Title, "sources", len(sources), "search_results", strings.Count(searchResults, "\n["))
 	output, err := c.client.Run(ctx, prompt)
 	if err != nil {
 		return storage.SaveResult{}, fmt.Errorf("codex run: %w", err)
@@ -127,6 +130,68 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 	}
 
 	return storage.SaveItems(ctx, c.db, target.Title, target.Category, sourceType, items)
+}
+
+// runSearches calls Brave Search API with multiple queries and returns formatted results.
+// Returns empty string if search client is not configured or no results found.
+func (c *Crawler) runSearches(ctx context.Context, title string) string {
+	if c.searchClient == nil {
+		return ""
+	}
+
+	queries := []string{
+		title + " 最新情報",
+		title + " ニュース",
+		title + " アップデート",
+	}
+
+	since := c.sinceDate.Truncate(24 * time.Hour)
+	seen := map[string]bool{}
+	var results []search.Result
+
+	for _, q := range queries {
+		res, err := c.searchClient.Search(ctx, q, 10)
+		if err != nil {
+			slog.Warn("search failed", "query", q, "err", err)
+			continue
+		}
+		slog.Debug("search", "query", q, "count", len(res))
+		for _, r := range res {
+			if seen[r.URL] {
+				continue
+			}
+			seen[r.URL] = true
+			// Skip results with a known date older than sinceDate
+			if !since.IsZero() && r.PublishedAt != "" {
+				if d, err := time.Parse("2006-01-02", r.PublishedAt); err == nil && d.Before(since) {
+					continue
+				}
+			}
+			results = append(results, r)
+		}
+	}
+
+	if len(results) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	for i, r := range results {
+		fmt.Fprintf(&sb, "[%d] %s\n", i+1, r.Title)
+		fmt.Fprintf(&sb, "URL: %s\n", r.URL)
+		if r.PublishedAt != "" {
+			fmt.Fprintf(&sb, "日付: %s\n", r.PublishedAt)
+		}
+		if r.Description != "" {
+			desc := r.Description
+			if len(desc) > 300 {
+				desc = desc[:300] + "..."
+			}
+			fmt.Fprintf(&sb, "概要: %s\n", desc)
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 // filterByDate removes items whose published_date is known and older than sinceDate.

@@ -1,5 +1,6 @@
 # sensitive config
 config/targets.yaml
+.env
 
 # database
 *.db

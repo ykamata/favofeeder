@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,9 +17,10 @@ type Client struct {
 	codexPath string
 	model     string
 	timeout   time.Duration
+	verbose   bool
 }
 
-func NewClient(codexPath, model string) *Client {
+func NewClient(codexPath, model string, verbose bool) *Client {
 	if codexPath == "" {
 		codexPath = "codex"
 	}
@@ -26,6 +28,7 @@ func NewClient(codexPath, model string) *Client {
 		codexPath: codexPath,
 		model:     model, // empty = use model from ~/.codex/config.toml
 		timeout:   defaultTimeout,
+		verbose:   verbose,
 	}
 }
 
@@ -47,11 +50,15 @@ func (c *Client) Run(ctx context.Context, prompt string) (string, error) {
 	if c.model != "" {
 		args = append(args, "-m", c.model)
 	}
-	args = append(args, prompt)
+	args = append(args, strings.ToValidUTF8(prompt, ""))
 	cmd := exec.CommandContext(ctx, c.codexPath, args...)
 
-	if out, err := cmd.CombinedOutput(); err != nil {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		return "", fmt.Errorf("codex exec failed: %w\noutput: %s", err, string(out))
+	}
+	if c.verbose {
+		slog.Debug("codex raw output", "output", string(out))
 	}
 
 	result, err := os.ReadFile(tmpPath)
@@ -62,9 +69,10 @@ func (c *Client) Run(ctx context.Context, prompt string) (string, error) {
 	return strings.TrimSpace(string(result)), nil
 }
 
-// BuildPrompt constructs the prompt for Codex CLI from target info.
+// BuildPrompt constructs the prompt for Codex CLI from target info and pre-fetched search results.
+// searchResults is a pre-formatted string of web search results; empty string means no results available.
 // sinceDate sets the preferred start date for news collection; zero value means no filter.
-func BuildPrompt(title, category string, sources []string, sinceDate time.Time) string {
+func BuildPrompt(title, category string, sources []string, searchResults string, sinceDate time.Time) string {
 	sourceList := strings.Join(sources, "\n")
 
 	var periodInstruction string
@@ -76,25 +84,24 @@ func BuildPrompt(title, category string, sources []string, sinceDate time.Time) 
 			sinceDate.Format("2006年1月2日"))
 	}
 
-	return fmt.Sprintf(`「%s」(%s)に関する最新情報を収集してください。
+	if searchResults == "" {
+		searchResults = "（検索結果なし）"
+	}
 
-## 手順
+	return fmt.Sprintf(`「%s」(%s)に関する最新情報を以下の Web 検索結果から抽出してください。
 
-### 1. 以下の公式ソースを確認する
+## 公式ソース URL（参考）
 %s
 
-### 2. Web 検索で新着情報を探す
-上記ソースに載っていない情報も拾うため、下記のようなクエリで検索してください:
-- 「%s 最新情報」
-- 「%s ニュース」
-- 「%s アップデート」
-- 「%s site:x.com」
+## Web 検索結果
+%s
 %s
 
 ## ルール
 
-- ソース確認 → Web 検索の順で、なるべく多くの新着情報を集めること
-- クエリを変えながら複数回検索し、見落としを防ぐこと
+- **Web 検索ツール（web_search 等）は一切使用しないこと。上記の検索結果のみを使用すること。**
+- 上記の検索結果から新着情報を抽出・要約すること
+- 重複する情報はまとめること
 - 日本語の情報を優先するが、重要な公式発表は英語でも含める
 - 情報が本当に何も見つからなかった場合のみ items を空配列にする
 
@@ -110,5 +117,5 @@ func BuildPrompt(title, category string, sources []string, sinceDate time.Time) 
       "content_type": "news/release/review/other"
     }
   ]
-}`, title, category, sourceList, title, title, title, title, periodInstruction)
+}`, title, category, sourceList, searchResults, periodInstruction)
 }

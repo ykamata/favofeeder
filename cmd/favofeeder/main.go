@@ -10,10 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/ykamata/favofeeder/internal/codex"
 	"github.com/ykamata/favofeeder/internal/config"
 	"github.com/ykamata/favofeeder/internal/crawler"
 	"github.com/ykamata/favofeeder/internal/notify"
+	"github.com/ykamata/favofeeder/internal/search"
 	"github.com/ykamata/favofeeder/internal/storage"
 )
 
@@ -44,15 +46,20 @@ func main() {
 }
 
 func run(args []string) error {
+	// Load .env if present (local development). Silently ignored in production where
+	// env vars are already set via docker-compose env_file or system environment.
+	_ = godotenv.Load()
+
 	fs := flag.NewFlagSet("favofeeder", flag.ContinueOnError)
 	configPath := fs.String("config", "config/targets.yaml", "path to targets YAML")
-	dbPath     := fs.String("db", os.Getenv("DATABASE_DSN"), "MySQL DSN or SQLite file path")
+	dbPath     := fs.String("db", "", "MySQL DSN or SQLite file path")
 	local      := fs.Bool("local", false, "use SQLite for local development (default file: favofeeder.db)")
 	codexPath  := fs.String("codex", "codex", "path to Codex CLI binary")
 	model      := fs.String("model", "gpt-5.5", "Codex model to use")
 	dryRun     := fs.Bool("dry-run", false, "print prompts without calling Codex or saving to DB")
 	sinceDays  := fs.Int("since-days", 30, "collect only items published within this many days (0 = no filter)")
 	verbose    := fs.Bool("v", false, "verbose logging")
+	braveKey   := fs.String("brave-key", os.Getenv("BRAVE_API_KEY"), "Brave Search API key")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -76,6 +83,8 @@ func run(args []string) error {
 		if dsn == "" {
 			dsn = "favofeeder.db"
 		}
+	} else if dsn == "" {
+		dsn = os.Getenv("DATABASE_DSN")
 	}
 
 	db, err := storage.Open(dsn, driver)
@@ -98,8 +107,15 @@ func run(args []string) error {
 		slog.Info("no previous crawl found, using since-days fallback", "since_days", *sinceDays)
 	}
 
-	client := codex.NewClient(*codexPath, *model)
-	c := crawler.New(client, db, *dryRun, sinceDate)
+	var searchClient *search.Client
+	if *braveKey != "" {
+		searchClient = search.NewClient(*braveKey)
+	} else {
+		slog.Warn("BRAVE_API_KEY not set; web search disabled")
+	}
+
+	client := codex.NewClient(*codexPath, *model, *verbose)
+	c := crawler.New(client, searchClient, db, *dryRun, sinceDate)
 
 	sinceStr := "none"
 	if !sinceDate.IsZero() {
