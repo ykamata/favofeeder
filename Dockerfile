@@ -19,7 +19,7 @@ WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
- && npm install -g @openai/codex
+ && npm install -g --ignore-scripts --minimum-release-age=10080 @openai/codex
 
 # Copy compiled Go binary
 COPY --from=builder /app/favofeeder /usr/local/bin/favofeeder
