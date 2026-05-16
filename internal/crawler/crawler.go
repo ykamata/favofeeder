@@ -132,22 +132,6 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 	return storage.SaveItems(ctx, c.db, target.Title, target.Category, sourceType, items)
 }
 
-// freshnessParam derives a Brave Search freshness value from sinceDate.
-func freshnessParam(since time.Time) string {
-	if since.IsZero() {
-		return ""
-	}
-	age := time.Since(since)
-	switch {
-	case age <= 24*time.Hour:
-		return "pd"
-	case age <= 7*24*time.Hour:
-		return "pw"
-	default:
-		return "pm"
-	}
-}
-
 // runSearches calls Brave Search API with multiple queries and returns formatted results.
 // Returns empty string if search client is not configured or no results found.
 func (c *Crawler) runSearches(ctx context.Context, title string, sources []config.Source) string {
@@ -155,7 +139,7 @@ func (c *Crawler) runSearches(ctx context.Context, title string, sources []confi
 		return ""
 	}
 
-	freshness := freshnessParam(c.sinceDate)
+	const freshness = "pd"
 
 	queries := []struct {
 		q         string
