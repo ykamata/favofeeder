@@ -100,7 +100,7 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 		}
 	}
 
-	searchResults := c.runSearches(ctx, target.Title)
+	searchResults := c.runSearches(ctx, target.Title, target.Sources)
 	prompt := codex.BuildPrompt(target.Title, target.Category, sources, searchResults, c.sinceDate)
 
 	slog.Debug("prompt", "target", target.Title, "prompt", prompt)
@@ -132,30 +132,62 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 	return storage.SaveItems(ctx, c.db, target.Title, target.Category, sourceType, items)
 }
 
+// freshnessParam derives a Brave Search freshness value from sinceDate.
+func freshnessParam(since time.Time) string {
+	if since.IsZero() {
+		return ""
+	}
+	age := time.Since(since)
+	switch {
+	case age <= 24*time.Hour:
+		return "pd"
+	case age <= 7*24*time.Hour:
+		return "pw"
+	default:
+		return "pm"
+	}
+}
+
 // runSearches calls Brave Search API with multiple queries and returns formatted results.
 // Returns empty string if search client is not configured or no results found.
-func (c *Crawler) runSearches(ctx context.Context, title string) string {
+func (c *Crawler) runSearches(ctx context.Context, title string, sources []config.Source) string {
 	if c.searchClient == nil {
 		return ""
 	}
 
-	queries := []string{
-		title + " 最新情報",
-		title + " ニュース",
-		title + " アップデート",
+	freshness := freshnessParam(c.sinceDate)
+
+	queries := []struct {
+		q         string
+		freshness string
+	}{
+		{title + " 最新情報", freshness},
+		{title + " ニュース", freshness},
+		{title + " アップデート", freshness},
+	}
+	for _, s := range sources {
+		if s.Type != "x_account" {
+			continue
+		}
+		account := strings.TrimPrefix(s.Account, "@")
+		// X posts are only indexed for ~1 week; use pw regardless of sinceDate.
+		queries = append(queries, struct {
+			q         string
+			freshness string
+		}{"site:x.com @" + account, "pw"})
 	}
 
 	since := c.sinceDate.Truncate(24 * time.Hour)
 	seen := map[string]bool{}
 	var results []search.Result
 
-	for _, q := range queries {
-		res, err := c.searchClient.Search(ctx, q, 10)
+	for _, entry := range queries {
+		res, err := c.searchClient.Search(ctx, entry.q, 10, entry.freshness)
 		if err != nil {
-			slog.Warn("search failed", "query", q, "err", err)
+			slog.Warn("search failed", "query", entry.q, "err", err)
 			continue
 		}
-		slog.Debug("search", "query", q, "count", len(res))
+		slog.Debug("search", "query", entry.q, "count", len(res))
 		for _, r := range res {
 			if seen[r.URL] {
 				continue

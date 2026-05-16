@@ -32,13 +32,18 @@ type Result struct {
 	PublishedAt string // "YYYY-MM-DD" or empty
 }
 
-func (c *Client) Search(ctx context.Context, query string, count int) ([]Result, error) {
+// Search queries Brave Search API. freshness filters by recency: "pd"=past day,
+// "pw"=past week, "pm"=past month, ""=no filter.
+func (c *Client) Search(ctx context.Context, query string, count int, freshness string) ([]Result, error) {
 	params := url.Values{
 		"q":                {query},
 		"count":            {fmt.Sprintf("%d", count)},
 		"search_lang":      {"jp"},
 		"country":          {"JP"},
 		"text_decorations": {"0"},
+	}
+	if freshness != "" {
+		params.Set("freshness", freshness)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL+"?"+params.Encode(), nil)
