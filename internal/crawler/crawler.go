@@ -154,11 +154,10 @@ func (c *Crawler) runSearches(ctx context.Context, title string, sources []confi
 			continue
 		}
 		account := strings.TrimPrefix(s.Account, "@")
-		// X posts are only indexed for ~1 week; use pw regardless of sinceDate.
 		queries = append(queries, struct {
 			q         string
 			freshness string
-		}{"site:x.com @" + account, "pw"})
+		}{"site:x.com @" + account, "pd"})
 	}
 
 	since := c.sinceDate.Truncate(24 * time.Hour)
