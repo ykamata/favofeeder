@@ -100,7 +100,7 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 		}
 	}
 
-	searchResults := c.runSearches(ctx, target.Title, target.Sources)
+	searchResults := c.runSearches(ctx, target.Title)
 	prompt := codex.BuildPrompt(target.Title, target.Category, sources, searchResults, c.sinceDate)
 
 	slog.Debug("prompt", "target", target.Title, "prompt", prompt)
@@ -134,43 +134,28 @@ func (c *Crawler) fetchTarget(ctx context.Context, target config.Target) (storag
 
 // runSearches calls Brave Search API with multiple queries and returns formatted results.
 // Returns empty string if search client is not configured or no results found.
-func (c *Crawler) runSearches(ctx context.Context, title string, sources []config.Source) string {
+func (c *Crawler) runSearches(ctx context.Context, title string) string {
 	if c.searchClient == nil {
 		return ""
 	}
 
-	const freshness = "pd"
-
-	queries := []struct {
-		q         string
-		freshness string
-	}{
-		{title + " 最新情報", freshness},
-		{title + " ニュース", freshness},
-		{title + " アップデート", freshness},
-	}
-	for _, s := range sources {
-		if s.Type != "x_account" {
-			continue
-		}
-		account := strings.TrimPrefix(s.Account, "@")
-		queries = append(queries, struct {
-			q         string
-			freshness string
-		}{"site:x.com @" + account, "pd"})
+	queries := []string{
+		title + " 最新情報",
+		title + " ニュース",
+		title + " アップデート",
 	}
 
 	since := c.sinceDate.Truncate(24 * time.Hour)
 	seen := map[string]bool{}
 	var results []search.Result
 
-	for _, entry := range queries {
-		res, err := c.searchClient.Search(ctx, entry.q, 10, entry.freshness)
+	for _, q := range queries {
+		res, err := c.searchClient.Search(ctx, q, 10, "pd")
 		if err != nil {
-			slog.Warn("search failed", "query", entry.q, "err", err)
+			slog.Warn("search failed", "query", q, "err", err)
 			continue
 		}
-		slog.Debug("search", "query", entry.q, "count", len(res))
+		slog.Debug("search", "query", q, "count", len(res))
 		for _, r := range res {
 			if seen[r.URL] {
 				continue
