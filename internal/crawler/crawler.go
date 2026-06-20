@@ -150,7 +150,7 @@ func (c *Crawler) runSearches(ctx context.Context, title string) string {
 	var results []search.Result
 
 	for _, q := range queries {
-		res, err := c.searchClient.Search(ctx, q, 10, "pd")
+		res, err := c.searchClient.Search(ctx, q, 10, "")
 		if err != nil {
 			slog.Warn("search failed", "query", q, "err", err)
 			continue
