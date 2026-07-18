@@ -14,6 +14,11 @@ import (
 	"github.com/ykamata/favofeeder/internal/storage"
 )
 
+// jstZone anchors all date-window math to JST. Content is Japanese and Brave
+// results carry JST-oriented dates; FixedZone avoids a tzdata dependency in
+// minimal container images.
+var jstZone = time.FixedZone("JST", 9*60*60)
+
 type Crawler struct {
 	client       *codex.Client
 	searchClient *search.Client // nil = web search disabled
@@ -145,25 +150,36 @@ func (c *Crawler) runSearches(ctx context.Context, title string) string {
 		title + " アップデート",
 	}
 
-	since := c.sinceDate.Truncate(24 * time.Hour)
+	// Restrict Brave to the crawl window with a date-range freshness filter
+	// (e.g. "2026-07-17to2026-07-18"). Without it Brave ranks by relevance and
+	// returns stale, authoritative pages, so fresh (yesterday/today) news never
+	// reaches Codex.
+	since := c.sinceDate
+	freshness := ""
+	if !since.IsZero() {
+		freshness = fmt.Sprintf("%sto%s",
+			since.In(jstZone).Format("2006-01-02"),
+			time.Now().In(jstZone).Format("2006-01-02"))
+	}
+
 	seen := map[string]bool{}
 	var results []search.Result
 
 	for _, q := range queries {
-		res, err := c.searchClient.Search(ctx, q, 10, "")
+		res, err := c.searchClient.Search(ctx, q, 10, freshness)
 		if err != nil {
 			slog.Warn("search failed", "query", q, "err", err)
 			continue
 		}
-		slog.Debug("search", "query", q, "count", len(res))
+		slog.Debug("search", "query", q, "count", len(res), "freshness", freshness)
 		for _, r := range res {
 			if seen[r.URL] {
 				continue
 			}
 			seen[r.URL] = true
-			// Skip results with a known date older than sinceDate
+			// Secondary guard: skip results whose known date is before the window.
 			if !since.IsZero() && r.PublishedAt != "" {
-				if d, err := time.Parse("2006-01-02", r.PublishedAt); err == nil && d.Before(since) {
+				if d, err := time.ParseInLocation("2006-01-02", r.PublishedAt, jstZone); err == nil && d.Before(since) {
 					continue
 				}
 			}
@@ -200,14 +216,14 @@ func (c *Crawler) filterByDate(items []parser.ContentItem) []parser.ContentItem 
 	if c.sinceDate.IsZero() {
 		return items
 	}
-	since := c.sinceDate.Truncate(24 * time.Hour)
+	since := c.sinceDate
 	filtered := items[:0]
 	for _, item := range items {
 		if item.PublishedDate == "" {
 			filtered = append(filtered, item)
 			continue
 		}
-		d, err := time.Parse("2006-01-02", item.PublishedDate)
+		d, err := time.ParseInLocation("2006-01-02", item.PublishedDate, jstZone)
 		if err != nil || !d.Before(since) {
 			filtered = append(filtered, item)
 			continue

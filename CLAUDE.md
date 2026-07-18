@@ -26,7 +26,7 @@ config/targets.yaml  →  Crawler  →  Brave Search API  →  Codex CLI  →  P
 
 ### 処理フロー
 
-1. `crawler.runSearches` が Brave Search API を呼び出し（3クエリ: 最新情報・ニュース・アップデート）
+1. `crawler.runSearches` が Brave Search API を呼び出し（3クエリ: 最新情報・ニュース・アップデート）。取得ウィンドウ（既定=昨日・今日）を `freshness=YYYY-MM-DDtoYYYY-MM-DD` の日付レンジで指定し、新着のみを取得する
 2. 検索結果（重複除去・日付フィルタ済み）を `codex.BuildPrompt` に渡す
 3. Codex CLI は渡された検索結果のみを使い JSON を返す（`web_search` ツール使用禁止）
 4. `parser.Parse` で JSON をパース → 日付フィルタ → DB 保存 → Slack 通知
@@ -61,7 +61,7 @@ DATABASE_DSN="user:pass@tcp(localhost:3306)/favofeeder" go run ./cmd/favofeeder
 | `-codex` | `codex` | Codex CLI バイナリのパス |
 | `-model` | `gpt-5.5` | Codex が使用するモデル |
 | `-dry-run` | `false` | Codex を呼び出してレスポンスを表示するが、保存・通知はしない |
-| `-since-days` | `30` | 初回実行時に遡る日数（2回目以降は前回クロール時刻を使用） |
+| `-since-days` | `2` | 遡る日数の固定ウィンドウ（`2` = 昨日・今日）。この範囲を毎回取得し、重複は URL ハッシュで排除 |
 | `-v` | `false` | デバッグログを有効化（プロンプト内容を出力） |
 | `-brave-key` | `$BRAVE_API_KEY` | Brave Search API キー（未設定時は web 検索スキップ） |
 

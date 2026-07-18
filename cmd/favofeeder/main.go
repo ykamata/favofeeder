@@ -57,7 +57,7 @@ func run(args []string) error {
 	codexPath  := fs.String("codex", "codex", "path to Codex CLI binary")
 	model      := fs.String("model", "gpt-5.5", "Codex model to use")
 	dryRun     := fs.Bool("dry-run", false, "print prompts without calling Codex or saving to DB")
-	sinceDays  := fs.Int("since-days", 30, "collect only items published within this many days (0 = no filter)")
+	lookbackDays := fs.Int("since-days", 2, "fixed number of days to look back (2 = yesterday + today); dedup prevents re-notification")
 	verbose    := fs.Bool("v", false, "verbose logging")
 	braveKey   := fs.String("brave-key", os.Getenv("BRAVE_API_KEY"), "Brave Search API key")
 
@@ -96,16 +96,15 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Use last successful crawl time as sinceDate.
-	// Fall back to --since-days on the first run (no prior crawl in DB).
-	sinceDate, err := storage.LastSuccessfulCrawlTime(ctx, db)
-	if err != nil {
-		return fmt.Errorf("query last crawl time: %w", err)
-	}
-	if sinceDate.IsZero() && *sinceDays > 0 {
-		sinceDate = time.Now().AddDate(0, 0, -*sinceDays).Truncate(24 * time.Hour)
-		slog.Info("no previous crawl found, using since-days fallback", "since_days", *sinceDays)
-	}
+	// Fixed lookback window in JST: always fetch the last N days (default 2 =
+	// yesterday + today), independent of the previous crawl time. An incremental
+	// window (last successful crawl) drops "yesterday" on the second run of the
+	// day, which is exactly the content we want. Duplicate items are skipped by
+	// content-hash dedup, so a fixed overlapping window never re-notifies.
+	jst := time.FixedZone("JST", 9*60*60)
+	now := time.Now().In(jst)
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, jst)
+	sinceDate := startOfToday.AddDate(0, 0, -(*lookbackDays - 1))
 
 	var searchClient *search.Client
 	if *braveKey != "" {
