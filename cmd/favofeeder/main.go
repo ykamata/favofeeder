@@ -55,7 +55,7 @@ func run(args []string) error {
 	dbPath     := fs.String("db", "", "MySQL DSN or SQLite file path")
 	local      := fs.Bool("local", false, "use SQLite for local development (default file: favofeeder.db)")
 	codexPath  := fs.String("codex", "codex", "path to Codex CLI binary")
-	model      := fs.String("model", "gpt-5.5", "Codex model to use")
+	model      := fs.String("model", "gpt-5.6-sol", "Codex model to use")
 	dryRun     := fs.Bool("dry-run", false, "print prompts without calling Codex or saving to DB")
 	lookbackDays := fs.Int("since-days", 2, "fixed number of days to look back (2 = yesterday + today); dedup prevents re-notification")
 	verbose    := fs.Bool("v", false, "verbose logging")
